@@ -5,9 +5,9 @@ import { CriteriaEditor } from "./criteria-editor";
 import { useWebsetStore } from "@/stores/webset-store";
 import { createWebset } from "@/lib/api-client";
 import { DEFAULT_RESULT_COUNT, RESULT_COUNT_OPTIONS } from "@/lib/constants";
-import { parseQueryToCriteria, parseCountFromQuery } from "@/lib/query-parser";
-import { Loader2, ChevronDown, ChevronUp, Ban, Sparkles, X } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { parseCountFromQuery, parseQueryToEnrichments, type EnrichmentSuggestion } from "@/lib/query-parser";
+import { Loader2, ChevronDown, ChevronUp, Ban, Sparkles, X, Check } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import type { ExcludeRef } from "@/lib/exa-types";
 import { toast } from "sonner";
 
@@ -21,29 +21,26 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
   useEffect(() => {
     if (initialQuery) setQuery(initialQuery);
   }, [initialQuery]);
-  const [autoCriteria, setAutoCriteria] = useState<string[]>([]);
-  const [dismissedCriteria, setDismissedCriteria] = useState<Set<string>>(new Set());
   const [manualCriteria, setManualCriteria] = useState<string[]>([]);
   const [count, setCount] = useState(DEFAULT_RESULT_COUNT);
   const [countSource, setCountSource] = useState<"auto" | "manual">("auto");
+  const [enrichmentSuggestions, setEnrichmentSuggestions] = useState<EnrichmentSuggestion[]>([]);
+  const [dismissedEnrichments, setDismissedEnrichments] = useState<Set<string>>(new Set());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced auto-parse of query into criteria + count
+  // Auto-detect count + enrichment suggestions from query
   const parseQuery = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const parsed = parseQueryToCriteria(q);
-      setAutoCriteria(parsed);
-      setDismissedCriteria(new Set());
-      // Auto-detect count from query (only if user hasn't manually set it)
+      // Count
       if (countSource === "auto") {
         const parsedCount = parseCountFromQuery(q);
-        if (parsedCount) {
-          setCount(parsedCount);
-        } else {
-          setCount(DEFAULT_RESULT_COUNT);
-        }
+        setCount(parsedCount ?? DEFAULT_RESULT_COUNT);
       }
+      // Enrichment suggestions
+      const suggestions = parseQueryToEnrichments(q);
+      setEnrichmentSuggestions(suggestions);
+      setDismissedEnrichments(new Set());
     }, 400);
   }, [countSource]);
 
@@ -52,12 +49,14 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
       parseQuery(query);
     } else {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      setAutoCriteria([]);
+      setEnrichmentSuggestions([]);
     }
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   }, [query, parseQuery]);
 
-  const visibleAutoCriteria = autoCriteria.filter((c) => !dismissedCriteria.has(c));
+  const visibleEnrichments = enrichmentSuggestions.filter(
+    (e) => !dismissedEnrichments.has(e.description)
+  );
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -91,10 +90,15 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
         id,
       }));
 
-      const allCriteria = [...visibleAutoCriteria, ...manualCriteria];
-      const filteredCriteria = allCriteria
+      const filteredCriteria = manualCriteria
         .filter((c) => c.trim())
         .map((c) => ({ description: c.trim() }));
+
+      // Auto-enrichments from parsed query — these become soft match/unmatch columns
+      const autoEnrichments = visibleEnrichments.map((e) => ({
+        description: e.description,
+        format: "text" as const,
+      }));
 
       const payload = {
         search: {
@@ -104,6 +108,7 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
           count,
         },
         ...(excludeRefs.length > 0 ? { exclude: excludeRefs } : {}),
+        ...(autoEnrichments.length > 0 ? { enrichments: autoEnrichments } : {}),
       };
 
       const webset = await createWebset(payload);
@@ -145,9 +150,9 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
           }}
         />
 
-        {/* Criteria pills inside the box */}
+        {/* Auto-enrichment suggestions */}
         <AnimatePresence mode="popLayout">
-          {visibleAutoCriteria.length > 0 && (
+          {visibleEnrichments.length > 0 && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}
@@ -155,21 +160,23 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
               className="flex flex-wrap gap-1.5 px-6 pb-2"
             >
               <span className="flex items-center gap-1 text-[10px] text-muted-foreground mr-1 self-center">
-                <Sparkles className="h-3 w-3 text-primary/60" />
+                <Sparkles className="h-3 w-3 text-accent-amber/60" />
+                <span className="text-[10px]">Enrich</span>
               </span>
-              {visibleAutoCriteria.map((criterion) => (
+              {visibleEnrichments.map((enrichment) => (
                 <motion.span
-                  key={criterion}
+                  key={enrichment.description}
                   layout
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   exit={{ opacity: 0, scale: 0.8 }}
                   transition={{ duration: 0.15 }}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary/15 border border-primary/25 text-xs text-primary font-medium"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-accent-amber/10 border border-accent-amber/20 text-xs text-accent-amber font-medium"
                 >
-                  {criterion}
+                  <Check className="h-3 w-3" />
+                  {enrichment.label}
                   <button
-                    onClick={() => setDismissedCriteria((prev) => new Set([...prev, criterion]))}
+                    onClick={() => setDismissedEnrichments((prev) => new Set([...prev, enrichment.description]))}
                     className="ml-0.5 hover:text-foreground transition-colors"
                   >
                     <X className="h-3 w-3" />

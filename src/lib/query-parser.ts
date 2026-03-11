@@ -49,78 +49,83 @@ export function parseCountFromQuery(query: string): number | null {
   return null;
 }
 
-export function parseQueryToCriteria(query: string): string[] {
-  const criteria: string[] = [];
+/**
+ * Generates enrichment column suggestions from a search query.
+ * These become soft "match/unmatch" columns (NOT hard-filter criteria).
+ *
+ * Example: "50 Banking professionals in Hong Kong who worked on WeChat ecosystem"
+ * → [
+ *     { description: "Has experience in Banking / financial services", format: "boolean" },
+ *     { description: "Has worked on WeChat ecosystem related projects", format: "boolean" },
+ *   ]
+ */
+export interface EnrichmentSuggestion {
+  description: string;
+  format: "text" | "boolean";
+  label: string; // short column header
+}
+
+export function parseQueryToEnrichments(query: string): EnrichmentSuggestion[] {
+  const suggestions: EnrichmentSuggestion[] = [];
   const trimmed = query.trim();
-  if (!trimmed) return criteria;
+  if (!trimmed) return suggestions;
 
-  // 1. Extract the role (everything before the first modifier)
-  const modifierMatch = trimmed.search(ROLE_MODIFIERS);
-  const rolePart = modifierMatch > 0 ? trimmed.slice(0, modifierMatch).trim() : trimmed;
-
-  if (rolePart && rolePart.length > 3) {
-    // Clean up: remove trailing "s" duplication, normalize
-    const role = rolePart.replace(/\s+/g, " ").trim();
-    criteria.push(`Must be a ${role}`);
-  }
-
-  // 2. Extract location
-  const locationMatch = trimmed.match(LOCATION_PATTERN);
-  if (locationMatch) {
-    const location = locationMatch[1].trim().replace(/\s+with.*$/i, "").replace(/\s+who.*$/i, "");
-    if (location.length > 1) {
-      criteria.push(`Based in ${location}`);
+  // Extract "who" clauses → enrichment
+  const whoMatch = trimmed.match(WHO_PATTERN);
+  if (whoMatch) {
+    const clause = whoMatch[1].trim();
+    if (clause.length > 3) {
+      suggestions.push({
+        description: `Has this person ${clause}? Answer yes or no with brief evidence.`,
+        format: "text",
+        label: clause.slice(0, 30),
+      });
     }
   }
 
-  // 3. Extract experience requirement
-  const expMatch = trimmed.match(EXPERIENCE_PATTERN);
-  if (expMatch) {
-    criteria.push(`Has ${expMatch[1].trim()}`);
-  }
-
-  // 4. Extract "with" qualifications
+  // Extract "with" qualifications → enrichment
   const withMatch = trimmed.match(WITH_PATTERN);
   if (withMatch) {
     let qual = withMatch[1].trim();
-    // Don't duplicate if it's just the experience we already captured
-    if (!EXPERIENCE_PATTERN.test(qual)) {
-      // Clean up trailing noise
+    if (!EXPERIENCE_PATTERN.test(qual) && qual.length > 3) {
       qual = qual.replace(/\s+experience$/i, " experience");
-      if (qual.length > 3) {
-        criteria.push(`Has ${qual}`);
-      }
+      suggestions.push({
+        description: `Does this person have ${qual}? Answer yes or no with brief evidence.`,
+        format: "text",
+        label: qual.slice(0, 30),
+      });
     }
   }
 
-  // 5. Extract "who" clauses
-  const whoMatch = trimmed.match(WHO_PATTERN);
-  if (whoMatch) {
-    const whoClause = whoMatch[1].trim();
-    if (whoClause.length > 3) {
-      criteria.push(`Must have ${whoClause}`);
-    }
+  // Extract experience requirement → enrichment
+  const expMatch = trimmed.match(EXPERIENCE_PATTERN);
+  if (expMatch) {
+    suggestions.push({
+      description: `Does this person have ${expMatch[1].trim()}? Answer yes or no with evidence.`,
+      format: "text",
+      label: `${expMatch[1].trim()}`,
+    });
   }
 
-  // 6. Extract "at <Company>" if present
+  // Extract "at <Company>" → enrichment
   const atMatch = trimmed.match(AT_COMPANY_PATTERN);
   if (atMatch) {
     const company = atMatch[1].trim();
-    // Avoid matching "at least", "at fintech" etc.
     if (company.length > 2 && !/^(least|most|a\s|the\s)/i.test(company)) {
-      criteria.push(`Currently or previously worked at ${company}`);
+      suggestions.push({
+        description: `Has this person worked at ${company}? Answer yes or no with role details.`,
+        format: "text",
+        label: company.slice(0, 30),
+      });
     }
   }
 
-  // Deduplicate — if criteria are too similar, remove duplicates
-  const unique = criteria.filter((c, i, arr) => {
-    for (let j = 0; j < i; j++) {
-      // If one criterion is a substring of another, skip the shorter one
-      if (arr[j].toLowerCase().includes(c.toLowerCase().slice(0, 20))) return false;
-      if (c.toLowerCase().includes(arr[j].toLowerCase().slice(0, 20))) return false;
-    }
+  // Deduplicate
+  const seen = new Set<string>();
+  return suggestions.filter((s) => {
+    const key = s.description.toLowerCase().slice(0, 40);
+    if (seen.has(key)) return false;
+    seen.add(key);
     return true;
-  });
-
-  return unique.slice(0, 5); // Max 5 criteria
+  }).slice(0, 5);
 }
