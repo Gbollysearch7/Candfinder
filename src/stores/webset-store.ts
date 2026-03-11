@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Webset, WebsetItem, Enrichment } from "@/lib/exa-types";
+import type { Webset, WebsetItem, Enrichment, Search } from "@/lib/exa-types";
 
 interface WebsetState {
   activeWebset: Webset | null;
@@ -23,6 +23,7 @@ interface WebsetState {
   setWebsetListLoading: (loading: boolean) => void;
   addEnrichment: (enrichment: Enrichment) => void;
   removeEnrichment: (enrichmentId: string) => void;
+  addSearch: (search: Search) => void;
   setIsSearching: (searching: boolean) => void;
   setSearchError: (error: string | null) => void;
 }
@@ -80,6 +81,19 @@ export const useWebsetStore = create<WebsetState>((set, get) => ({
       activeWebset: {
         ...ws,
         enrichments: ws.enrichments.filter((e) => e.id !== enrichmentId),
+      },
+    });
+  },
+
+  addSearch: (search) => {
+    const ws = get().activeWebset;
+    if (!ws) return;
+    // Add the new search and set webset back to running so polling restarts
+    set({
+      activeWebset: {
+        ...ws,
+        searches: [...ws.searches, search],
+        status: "running",
       },
     });
   },

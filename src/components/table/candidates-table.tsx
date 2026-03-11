@@ -15,6 +15,7 @@ import { useUiStore } from "@/stores/ui-store";
 import { EnrichmentCell } from "./enrichment-cell";
 import { AddColumnDialog } from "./add-column-dialog";
 import { FloatingActionBar } from "./floating-action-bar";
+import { FindMoreBar } from "./find-more-bar";
 import { TableEmptyState } from "./table-empty-state";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -625,6 +626,7 @@ export function CandidatesTable() {
         </div>
       </div>
 
+      <FindMoreBar />
       <FloatingActionBar />
       <AddColumnDialog />
     </div>

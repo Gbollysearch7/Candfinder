@@ -17,8 +17,10 @@ export function Header() {
   if (!activeWebset) return null;
 
   const query = activeWebset.searches?.[0]?.query ?? "Untitled";
-  const progress = activeWebset.searches?.[0]?.progress;
-  const found = progress?.found ?? items.length;
+  const found = items.length;
+  const hasRunningSearch = activeWebset.searches?.some(
+    (s) => s.status === "running" || s.status === "pending"
+  );
 
   const handleCancel = async () => {
     if (!activeWebsetId) return;
@@ -55,11 +57,11 @@ export function Header() {
         {found > 0 && (
           <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-full border border-white/10">
             <span className="relative flex h-2 w-2">
-              {activeWebset.status === "running" && (
+              {hasRunningSearch && (
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-electric opacity-75" />
               )}
               <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                activeWebset.status === "running" ? "bg-electric" : "bg-accent-green"
+                hasRunningSearch ? "bg-electric" : "bg-accent-green"
               }`} />
             </span>
             <span className="text-xs font-medium text-white/80">

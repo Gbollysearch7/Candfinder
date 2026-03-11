@@ -19,11 +19,12 @@ export function AppShell() {
   useWebsetPolling();
 
   const status = activeWebset?.status;
-  // Show progress screen while search is running/pending — even if items start arriving
-  // Results table only appears once the search completes (status is idle/cancelled)
+  // Show progress screen only for the initial search (no items yet).
+  // If we already have items (e.g. "find more" or "refine"), keep showing the table.
   const showSearchInProgress =
     activeWebset &&
-    (status === "running" || status === "pending");
+    (status === "running" || status === "pending") &&
+    items.length === 0;
 
   const viewKey = !activeWebset
     ? "empty"

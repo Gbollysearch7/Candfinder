@@ -32,6 +32,23 @@ const AT_COMPANY_PATTERN =
 // Role extraction — the core noun phrase before location/qualification modifiers
 const ROLE_MODIFIERS = /\b(?:in|from|based|located|with|who|at)\b/i;
 
+/**
+ * Extracts a result count number from the query if the user specified one.
+ * E.g. "50 professionals in Hong Kong" → 50
+ *      "Find 100 software engineers" → 100
+ */
+export function parseCountFromQuery(query: string): number | null {
+  // Match patterns like "50 professionals", "find 100 developers", "10 people"
+  const match = query.match(
+    /\b(\d{1,4})\s+(?:professionals?|people|persons?|candidates?|developers?|engineers?|designers?|managers?|analysts?|leads?|directors?|executives?|specialists?|consultants?|experts?)/i
+  );
+  if (match) {
+    const n = parseInt(match[1], 10);
+    if (n >= 1 && n <= 1000) return n;
+  }
+  return null;
+}
+
 export function parseQueryToCriteria(query: string): string[] {
   const criteria: string[] = [];
   const trimmed = query.trim();

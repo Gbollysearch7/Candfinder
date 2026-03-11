@@ -1,9 +1,11 @@
 import type {
   CreateWebsetPayload,
+  CreateSearchPayload,
   CreateEnrichmentPayload,
   Webset,
   WebsetItem,
   Enrichment,
+  Search,
   PaginatedResponse,
   ListWebsetsParams,
   ListItemsParams,
@@ -71,6 +73,14 @@ export function deleteWebset(websetId: string) {
 
 export function cancelWebset(websetId: string) {
   return apiFetch<Webset>(`/websets/${websetId}/cancel`, { method: "POST" });
+}
+
+/** Add a new search to an existing webset (find more / refine) */
+export function createSearch(websetId: string, payload: CreateSearchPayload) {
+  return apiFetch<Search>(`/websets/${websetId}/searches`, {
+    method: "POST",
+    body: payload,
+  });
 }
 
 // ---- Items ----

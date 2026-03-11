@@ -36,6 +36,15 @@ export interface CreateWebsetPayload {
   metadata?: Record<string, unknown>;
 }
 
+export interface CreateSearchPayload {
+  query: string;
+  entity?: { type: EntityType };
+  criteria?: Array<{ description: string }>;
+  count: number;
+  behavior?: "append" | "override";
+  exclude?: ExcludeRef[];
+}
+
 export interface CreateEnrichmentPayload {
   description: string;
   format: EnrichmentFormat;

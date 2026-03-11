@@ -4,8 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { CriteriaEditor } from "./criteria-editor";
 import { useWebsetStore } from "@/stores/webset-store";
 import { createWebset } from "@/lib/api-client";
-import { DEFAULT_RESULT_COUNT } from "@/lib/constants";
-import { parseQueryToCriteria } from "@/lib/query-parser";
+import { DEFAULT_RESULT_COUNT, RESULT_COUNT_OPTIONS } from "@/lib/constants";
+import { parseQueryToCriteria, parseCountFromQuery } from "@/lib/query-parser";
 import { Loader2, ChevronDown, ChevronUp, Ban, Sparkles, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { ExcludeRef } from "@/lib/exa-types";
@@ -24,18 +24,28 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
   const [autoCriteria, setAutoCriteria] = useState<string[]>([]);
   const [dismissedCriteria, setDismissedCriteria] = useState<Set<string>>(new Set());
   const [manualCriteria, setManualCriteria] = useState<string[]>([]);
-  const count = DEFAULT_RESULT_COUNT;
+  const [count, setCount] = useState(DEFAULT_RESULT_COUNT);
+  const [countSource, setCountSource] = useState<"auto" | "manual">("auto");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced auto-parse of query into criteria
+  // Debounced auto-parse of query into criteria + count
   const parseQuery = useCallback((q: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
       const parsed = parseQueryToCriteria(q);
       setAutoCriteria(parsed);
       setDismissedCriteria(new Set());
+      // Auto-detect count from query (only if user hasn't manually set it)
+      if (countSource === "auto") {
+        const parsedCount = parseCountFromQuery(q);
+        if (parsedCount) {
+          setCount(parsedCount);
+        } else {
+          setCount(DEFAULT_RESULT_COUNT);
+        }
+      }
     }, 400);
-  }, []);
+  }, [countSource]);
 
   useEffect(() => {
     if (query.trim().length > 5) {
@@ -172,18 +182,56 @@ export function SearchComposer({ initialQuery }: SearchComposerProps) {
 
         {/* Action bar inside search box */}
         <div className="flex items-center justify-between px-6 py-3 border-t border-white/10">
-          <button
-            onClick={() => setShowAdvanced(!showAdvanced)}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
-            Options
-            {excludedWebsetIds.size > 0 && (
-              <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
-                {excludedWebsetIds.size} excluded
-              </span>
-            )}
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setShowAdvanced(!showAdvanced)}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+            >
+              {showAdvanced ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+              Options
+              {excludedWebsetIds.size > 0 && (
+                <span className="ml-1 px-1.5 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-medium">
+                  {excludedWebsetIds.size} excluded
+                </span>
+              )}
+            </button>
+
+            {/* Result count selector */}
+            <div className="flex items-center gap-1.5 ml-2">
+              {RESULT_COUNT_OPTIONS.map((n) => (
+                <button
+                  key={n}
+                  onClick={() => { setCount(n); setCountSource("manual"); }}
+                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                    count === n
+                      ? "bg-electric/20 text-electric border border-electric/30"
+                      : "bg-white/5 text-muted-foreground border border-white/10 hover:border-white/20 hover:text-foreground"
+                  }`}
+                >
+                  {n}
+                </button>
+              ))}
+              <div className="relative">
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={!RESULT_COUNT_OPTIONS.includes(count as typeof RESULT_COUNT_OPTIONS[number]) ? count : ""}
+                  placeholder="Custom"
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (v >= 1 && v <= 1000) { setCount(v); setCountSource("manual"); }
+                  }}
+                  className={`w-[72px] px-2.5 py-1 rounded-md text-xs font-medium border bg-white/5 outline-none transition-colors placeholder:text-muted-foreground/50 ${
+                    !RESULT_COUNT_OPTIONS.includes(count as typeof RESULT_COUNT_OPTIONS[number])
+                      ? "border-electric/30 text-electric bg-electric/10"
+                      : "border-white/10 text-muted-foreground hover:border-white/20"
+                  }`}
+                />
+              </div>
+              <span className="text-[10px] text-muted-foreground">results</span>
+            </div>
+          </div>
 
           <button
             onClick={handleSearch}
